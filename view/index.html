@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlockFlow | Enterprise Intelligence Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: { 900: '#0f172a', 950: '#020617' }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-out',
+                        'bounce-slow': 'bounce 3s infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Chart.js para Séries Temporais -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-300 selection:bg-emerald-500 selection:text-white">
+
+    <!-- HEADER CORPORATIVO -->
+    <header class="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/50 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
+                <span class="font-bold text-lg tracking-wider text-slate-900 dark:text-white">FLOCK<span class="text-emerald-500">FLOW</span></span>
+                <span class="text-xs uppercase tracking-widest bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 px-2 py-0.5 rounded-full border border-slate-300 dark:border-slate-700">Enterprise BI</span>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <button onclick="toggleTheme()" class="bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-300 p-2 rounded-lg text-xs transition flex items-center space-x-1 border border-slate-300 dark:border-slate-700 font-semibold" title="Alternar Tema">
+                    <span id="theme-icon">☀️ / 🌙</span>
+                </button>
+
+                <div class="flex items-center space-x-2">
+                    <span class="text-xs text-slate-600 dark:text-slate-400">Galpão:</span>
+                    <select id="select-galpao" onchange="mudarGalpao(this.value)" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono text-emerald-600 dark:text-emerald-400 focus:outline-none focus:border-emerald-500">
+                        <option value="">Carregando...</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="max-w-7xl mx-auto px-6 py-10 flex-1 w-full relative">
+        
+        <!-- MENSAGEM INTELIGENTE DE GALPÃO VAZIO (Tela Exclusiva) -->
+        <div id="mensagem-vazio" class="hidden flex-col items-center justify-center py-20 px-4 text-center min-h-[60vh] bg-white/50 dark:bg-slate-900/50 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 animate-fade-in">
+            <div class="text-7xl mb-6 animate-bounce-slow">🐣</div>
+            <h2 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">Tudo limpo por aqui!</h2>
+            <p class="text-slate-600 dark:text-slate-400 max-w-lg text-base leading-relaxed mb-6">
+                Este galpão está no período de <strong>Vazio Sanitário</strong>. Estamos quebrando o ciclo de patógenos, higienizando os equipamentos e preparando o clima ideal para receber o próximo lote de aves com total segurança.
+            </p>
+            <span class="text-xs font-mono bg-slate-200 dark:bg-slate-800 text-slate-500 px-4 py-2 rounded-full border border-slate-300 dark:border-slate-700">Sensores IoT em Standby</span>
+        </div>
+
+        <!-- ENVOLVENDO TODO O CONTEÚDO DO PAINEL PARA OCULTAR QUANDO VAZIO -->
+        <div id="conteudo-painel" class="space-y-8 hidden animate-fade-in">
+            
+            <!-- TÍTULO -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
+                <div>
+                    <h1 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Painel de Desempenho e Inteligência</h1>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Monitoramento em tempo real de borda, impacto financeiro e modelagem de cenários.</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span id="badge-modo" class="text-xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-lg font-medium">Modo: Tempo Real (Supabase)</span>
+                </div>
+            </div>
+
+            <!-- BARRA SUPERIOR DE STATUS GLOBAL E CONTEXTO DO LOTE -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                <div id="semaforo-card" class="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-5 shadow-xl flex items-center space-x-4 transition-all">
+                    <div id="semaforo-dot" class="w-4 h-4 rounded-full bg-emerald-500 animate-ping"></div>
+                    <div class="w-full">
+                        <div class="flex items-center justify-between mb-1">
+                            <p class="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Status Geral do Setor</p>
+                            <div class="relative group cursor-pointer">
+                                <span class="w-4 h-4 rounded-full bg-white/50 dark:bg-black/20 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-mono flex items-center justify-center hover:bg-emerald-200 dark:hover:bg-emerald-800 transition">?</span>
+                                <div class="absolute bottom-full right-0 mb-2 hidden group-hover:block w-48 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                    <p class="font-semibold mb-1 border-b pb-1">Semáforo</p>
+                                    <p>Visão global baseada na última leitura de gases e clima.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <h3 id="semaforo-texto" class="text-base font-bold text-slate-900 dark:text-white tracking-tight">--</h3>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xl flex items-center justify-between">
+                    <div class="w-full">
+                        <div class="flex items-center justify-between mb-1">
+                            <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ciclo de Produção</p>
+                            <div class="relative group cursor-pointer">
+                                <span class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-mono flex items-center justify-center hover:bg-slate-700 hover:text-white transition">?</span>
+                                <div class="absolute bottom-full right-0 mb-2 hidden group-hover:block w-48 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                    <p class="font-semibold mb-1 border-b pb-1">Idade do Lote</p>
+                                    <p>Dias decorridos desde a data oficial de alojamento.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <h3 id="lote-dia" class="text-base font-bold text-slate-900 dark:text-white tracking-tight">--</h3>
+                            <span class="text-xs bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 px-2.5 py-1 rounded-lg font-mono font-semibold">15.200 Aves</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xl flex items-center justify-between">
+                    <div class="w-full flex justify-between items-center">
+                        <div>
+                            <div class="flex items-center space-x-2 mb-1">
+                                <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Acionamento</p>
+                                <div class="relative group cursor-pointer">
+                                    <span class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-mono flex items-center justify-center hover:bg-slate-700 hover:text-white transition">?</span>
+                                    <div class="absolute bottom-full right-0 mb-2 hidden group-hover:block w-56 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                        <p class="font-semibold mb-1 border-b pb-1">Controle de Borda</p>
+                                        <p>Se em automático, os sensores ligam a ventilação. O botão força o acionamento direto.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <h3 id="status-killswitch" class="text-xs font-bold text-emerald-600 dark:text-emerald-400 tracking-tight mt-1">AUTOMÁTICO (Borda)</h3>
+                        </div>
+                        <button id="btn-killswitch" onclick="toggleKillSwitch()" class="bg-slate-100 dark:bg-slate-800 hover:bg-rose-600 hover:border-rose-600 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
+                            Forçar Exaustor
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BANNER DE INTELIGÊNCIA ARTIFICIAL -->
+            <div id="ai-banner" class="bg-gradient-to-r from-indigo-50 via-white to-white dark:from-indigo-950/60 dark:via-slate-900 dark:to-slate-900 border border-indigo-500/30 rounded-xl p-4 shadow-xl flex items-center justify-between relative">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-xs">AI</div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h4 class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">Previsibilidade Preditiva (Forecasting)</h4>
+                            <div class="relative group cursor-pointer">
+                                <span class="w-4 h-4 rounded-full bg-white/50 dark:bg-black/20 border border-indigo-500/30 text-indigo-700 dark:text-indigo-300 text-[10px] font-mono flex items-center justify-center hover:bg-indigo-200 dark:hover:bg-indigo-800 transition">?</span>
+                                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-64 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                    <p class="font-semibold text-slate-900 dark:text-white mb-1 border-b border-slate-200 dark:border-slate-800 pb-1">Random Forest / ML</p>
+                                    <p class="leading-relaxed">Análise de tendência baseada no histórico de temperatura, vento e dias para antecipar picos de amônia.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <p id="ai-mensagem" class="text-sm text-slate-700 dark:text-slate-300 mt-0.5">Analisando tendências de telemetria...</p>
+                    </div>
+                </div>
+                <div id="ai-badge" class="text-xs font-semibold px-3 py-1 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 border border-slate-300 dark:border-slate-700">--</div>
+            </div>
+
+            <!-- GRID DE GERAÇÃO DE VALOR E ROI -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                
+                <!-- CARD: Aves Salvas -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl flex flex-col justify-between relative">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Aves Salvas</p>
+                            <div class="relative group cursor-pointer">
+                                <span class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-mono flex items-center justify-center hover:bg-slate-700 hover:text-white transition">?</span>
+                                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-64 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                    <p class="font-semibold text-slate-900 dark:text-white mb-1 border-b border-slate-200 dark:border-slate-800 pb-1">Mortalidade Evitada</p>
+                                    <p class="leading-relaxed">Estimativa de aves salvas de óbito por estresse agudo, mitigado pela ventilação cirúrgica de borda.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <h3 id="kpi-aves-salvas" class="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-2 tracking-tight">-- un</h3>
+                    </div>
+                </div>
+
+                <!-- CARD: Dinheiro Salvo -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl flex flex-col justify-between relative">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Dinheiro Salvo (ROI)</p>
+                            <div class="relative group cursor-pointer">
+                                <span class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-mono flex items-center justify-center hover:bg-slate-700 hover:text-white transition">?</span>
+                                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-64 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                    <p class="font-semibold text-slate-900 dark:text-white mb-1 border-b border-slate-200 dark:border-slate-800 pb-1">Retorno Financeiro</p>
+                                    <p class="leading-relaxed">Soma do valor de mercado das aves salvas + a economia gerada ao não deixar o exaustor ligado 24h.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <h3 id="kpi-dinheiro-salvo" class="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-2 tracking-tight">R$ --</h3>
+                    </div>
+                </div>
+
+                <!-- CARD: Custo Energia -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl flex flex-col justify-between relative">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Custo Energia</p>
+                            <div class="relative group cursor-pointer">
+                                <span class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-mono flex items-center justify-center hover:bg-slate-700 hover:text-white transition">?</span>
+                                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-64 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                    <p class="font-semibold text-slate-900 dark:text-white mb-1 border-b border-slate-200 dark:border-slate-800 pb-1">Mitigação Térmica/Gases</p>
+                                    <p class="leading-relaxed">Gasto acumulado pelas vezes em que o exaustor precisou ser ativado pela inteligência de borda.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <h3 id="kpi-custo-energia" class="text-3xl font-bold text-slate-900 dark:text-white mt-2 tracking-tight">R$ --</h3>
+                    </div>
+                </div>
+
+                <!-- CARD: Ventilação -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl flex flex-col justify-between relative">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Ventilação</p>
+                            <div class="relative group cursor-pointer">
+                                <span class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-mono flex items-center justify-center hover:bg-slate-700 hover:text-white transition">?</span>
+                                <div class="absolute bottom-full right-0 lg:left-1/2 lg:-translate-x-1/2 mb-2 hidden group-hover:block w-64 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                    <p class="font-semibold text-slate-900 dark:text-white mb-1 border-b border-slate-200 dark:border-slate-800 pb-1">Tempo de Exaustão</p>
+                                    <p class="leading-relaxed">Tempo cumulativo no ciclo em que o exaustor foi mantido ligado para combater insalubridade.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <h3 id="kpi-horas-exaustor" class="text-3xl font-bold text-slate-900 dark:text-white mt-2 tracking-tight">-- h</h3>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- GRÁFICOS AMBIENTAIS COM INDICADORES INTELIGENTES E GRANDES -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl relative">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-200 tracking-wide uppercase flex items-center flex-wrap gap-2">
+                            Concentração CO2
+                            <span id="val-co2" class="ml-2 font-bold px-3 py-1 rounded-lg text-sm md:text-base border transition-colors shadow-sm bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500">-- ppm</span>
+                        </h3>
+                        <div class="relative group cursor-pointer">
+                            <span class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-mono flex items-center justify-center hover:bg-slate-700 hover:text-white transition">?</span>
+                            <div class="absolute bottom-full right-0 mb-2 hidden group-hover:block w-64 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                <p class="font-semibold text-slate-900 dark:text-white mb-1 border-b border-slate-200 dark:border-slate-800 pb-1">Gás Carbônico</p>
+                                <p class="leading-relaxed">Monitora densidade respiratória para prevenir ascite e regular a renovação do ar no galpão.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-emerald-600 dark:text-emerald-400 font-mono mb-4 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded">
+                        &bull; Referência Ideal: Abaixo de 1.500 ppm (Crítico > 2.500 ppm)
+                    </p>
+                    <div class="h-64 relative"><canvas id="chartCo2"></canvas></div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl relative">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-200 tracking-wide uppercase flex items-center flex-wrap gap-2">
+                            Ar (NH3 & Poeira)
+                            <span id="val-nh3" class="ml-2 font-bold px-3 py-1 rounded-lg text-sm md:text-base border transition-colors shadow-sm bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500">NH3: --</span>
+                            <span id="val-poeira" class="font-bold px-3 py-1 rounded-lg text-sm md:text-base border transition-colors shadow-sm bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500">PM2.5: --</span>
+                        </h3>
+                        <div class="relative group cursor-pointer">
+                            <span class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-mono flex items-center justify-center hover:bg-slate-700 hover:text-white transition">?</span>
+                            <div class="absolute bottom-full right-0 mb-2 hidden group-hover:block w-64 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                <p class="font-semibold text-slate-900 dark:text-white mb-1 border-b border-slate-200 dark:border-slate-800 pb-1">Qualidade do Ar</p>
+                                <p class="leading-relaxed">Sinergia entre particulados (PM2.5) e amônia, que juntos causam sérias lesões respiratórias na ave.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-amber-600 dark:text-amber-400 font-mono mb-4 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded">
+                        &bull; Referência Ideal: NH3 &lt; 10 ppm | PM2.5 &lt; 30 µg/m³
+                    </p>
+                    <div class="h-64 relative"><canvas id="chartAr"></canvas></div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl relative">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-200 tracking-wide uppercase flex items-center flex-wrap gap-2">
+                        Térmico & Vento
+                        <span id="val-temp" class="ml-2 font-bold px-3 py-1 rounded-lg text-sm md:text-base border transition-colors shadow-sm bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500">-- °C</span>
+                    </h3>
+                    <div class="relative group cursor-pointer">
+                        <span class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-mono flex items-center justify-center hover:bg-slate-700 hover:text-white transition">?</span>
+                        <div class="absolute bottom-full right-0 mb-2 hidden group-hover:block w-64 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                            <p class="font-semibold text-slate-900 dark:text-white mb-1 border-b border-slate-200 dark:border-slate-800 pb-1">Conforto Térmico</p>
+                            <p class="leading-relaxed">Avalia a temperatura, umidade e o resfriamento eólico (vento) gerado pelas placas e exaustores.</p>
+                        </div>
+                    </div>
+                </div>
+                <p id="ref-ideal-termica" class="text-[11px] text-cyan-600 dark:text-cyan-400 font-mono mb-4 bg-cyan-500/10 border border-cyan-500/20 px-2 py-1 rounded">
+                    &bull; Referência Ideal: Calculando fase...
+                </p>
+                <div class="h-72 relative"><canvas id="chartTermico"></canvas></div>
+            </div>
+
+            <!-- INDICADORES ZOOTÉCNICOS E RENDIMENTO -->
+            <div class="mt-8 border-t border-slate-200 dark:border-slate-800 pt-8 mb-8">
+                <h2 class="text-xl font-bold text-slate-900 dark:text-white mb-6">Painel Zootécnico e Rendimento</h2>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    <div id="card-rendimento" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl flex flex-col justify-center text-center transition-colors">
+                        <div class="flex items-center justify-center space-x-2 mb-2">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Qualidade Pré-Abate</p>
+                            <div class="relative group cursor-pointer">
+                                <span class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-mono flex items-center justify-center hover:bg-slate-700 hover:text-white transition">?</span>
+                                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-64 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                    <p class="font-semibold text-slate-900 dark:text-white mb-1 border-b border-slate-200 dark:border-slate-800 pb-1">Retenção Hídrica (Carne)</p>
+                                    <p class="leading-relaxed">Avalia flutuações térmicas no fim do ciclo. Variações bruscas causam alcalose respiratória e perda de rendimento no abatedouro.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="icone-rendimento" class="text-4xl mb-3">🍗</div>
+                        <h3 id="status-rendimento" class="text-lg font-bold text-slate-900 dark:text-white">--</h3>
+                        <p id="msg-rendimento" class="text-xs text-slate-600 dark:text-slate-400 mt-2">Aguardando telemetria...</p>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl flex flex-col justify-center text-center">
+                        <div class="flex items-center justify-center space-x-2 mb-2">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">FCA Protegido</p>
+                            <div class="relative group cursor-pointer">
+                                <span class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-mono flex items-center justify-center hover:bg-slate-700 hover:text-white transition">?</span>
+                                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-64 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                    <p class="font-semibold text-slate-900 dark:text-white mb-1 border-b border-slate-200 dark:border-slate-800 pb-1">Conversão Alimentar</p>
+                                    <p class="leading-relaxed">Mostra o ganho de peso assegurado, evitando que a ave gaste energia térmica (calorias) tentando se refrescar.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <h3 id="kpi-fca" class="text-4xl font-bold text-indigo-600 dark:text-indigo-400">1.--</h3>
+                        <p class="text-xs text-slate-600 dark:text-slate-400 mt-2">Fator de Conversão Projetado</p>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl lg:col-span-1">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-200 tracking-wide uppercase">Mortalidade vs Temp</h3>
+                            <div class="relative group cursor-pointer">
+                                <span class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-mono flex items-center justify-center hover:bg-slate-700 hover:text-white transition">?</span>
+                                <div class="absolute bottom-full right-0 mb-2 hidden group-hover:block w-64 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                    <p class="font-semibold text-slate-900 dark:text-white mb-1 border-b border-slate-200 dark:border-slate-800 pb-1">Mortalidade Diária</p>
+                                    <p class="leading-relaxed">Cruza a temperatura máxima atingida no dia com o número de óbitos para validar o resfriamento.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="h-40 relative"><canvas id="chartZootecnico"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GRID INFERIOR (Operacional e Configurações) -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+                
+                <div class="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center space-x-2">
+                                <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-200 tracking-wide uppercase">Simulador What-If</h3>
+                                <div class="relative group cursor-pointer">
+                                    <span class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-mono flex items-center justify-center hover:bg-slate-700 hover:text-white transition">?</span>
+                                    <div class="absolute bottom-full left-0 mb-2 hidden group-hover:block w-64 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                        <p class="font-semibold text-slate-900 dark:text-white mb-1 border-b border-slate-200 dark:border-slate-800 pb-1">Simulação Financeira</p>
+                                        <p class="leading-relaxed">Teste cenários de custo e receita baseados no uso elétrico atual recalculado instantaneamente.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <span class="text-[10px] bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded font-medium">Interativo</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tarifa (R$/kWh)</label><input type="number" id="input-tarifa" value="0.85" step="0.05" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white font-mono"></div>
+                            <div><label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Exaustor (kW)</label><input type="number" id="input-potencia" value="2.5" step="0.1" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white font-mono"></div>
+                            <div><label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Custo Fixo (R$)</label><input type="number" id="input-fixo" value="15000" step="500" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white font-mono"></div>
+                            <div><label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Receita (R$)</label><input type="number" id="input-receita" value="45000" step="500" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white font-mono"></div>
+                        </div>
+                    </div>
+                    <div class="mt-8 flex gap-4">
+                        <button onclick="executarSimulacao()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-lg text-xs uppercase transition shadow-lg">Executar</button>
+                        <button onclick="resetarModoReal()" class="flex-1 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-300 font-medium py-2.5 rounded-lg text-xs uppercase transition">Restaurar Real</button>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl relative">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center space-x-2">
+                                <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-200 tracking-wide uppercase">Saúde do Exaustor</h3>
+                                <div class="relative group cursor-pointer">
+                                    <span class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-mono flex items-center justify-center hover:bg-slate-700 hover:text-white transition">?</span>
+                                    <div class="absolute bottom-full right-0 mb-2 hidden group-hover:block w-64 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                        <p class="font-semibold text-slate-900 dark:text-white mb-1 border-b border-slate-200 dark:border-slate-800 pb-1">Manutenção</p>
+                                        <p class="leading-relaxed">Mede o desgaste do motor em relação à vida útil recomendada, evitando queima por superaquecimento.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <span id="maint-badge" class="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded font-semibold">--</span>
+                        </div>
+                        <div class="space-y-3 font-mono text-xs">
+                            <div class="flex justify-between text-slate-700 dark:text-slate-300"><span>Operação:</span><span id="maint-horas">-- h</span></div>
+                            <div class="flex justify-between text-slate-700 dark:text-slate-300"><span>Vida Útil:</span><span id="maint-limite">200.0 h</span></div>
+                            <div class="w-full bg-slate-100 dark:bg-slate-950 rounded-full h-2 border border-slate-300 dark:border-slate-800 overflow-hidden mt-2">
+                                <div id="maint-bar" class="bg-emerald-500 h-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl relative">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center space-x-2">
+                                <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-200 tracking-wide uppercase">Governança</h3>
+                                <div class="relative group cursor-pointer">
+                                    <span class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-[10px] font-mono flex items-center justify-center hover:bg-slate-700 hover:text-white transition">?</span>
+                                    <div class="absolute bottom-full right-0 mb-2 hidden group-hover:block w-64 p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl text-xs text-slate-700 dark:text-slate-300 z-50 pointer-events-none text-left">
+                                        <p class="font-semibold text-slate-900 dark:text-white mb-1 border-b border-slate-200 dark:border-slate-800 pb-1">Auditoria CSV</p>
+                                        <p class="leading-relaxed">Gera relatório completo em planilha para comprovação sanitária e diretoria.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <button onclick="exportarRelatorio()" class="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-medium py-2.5 rounded-lg text-xs uppercase transition mt-2">Baixar CSV</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- SCRIPTS -->
+    <script>
+        let GALPAO_ID = "";
+        let modoSimulacaoAtivo = false;
+        let killSwitchState = false;
+        let isGalpaoVazio = false; 
+        let dia_ciclo_atual = 0; 
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            html.classList.toggle('dark');
+        }
+
+        async function toggleKillSwitch() {
+            if (!GALPAO_ID || isGalpaoVazio) return;
+            killSwitchState = !killSwitchState;
+            const btn = document.getElementById("btn-killswitch");
+            const statusText = document.getElementById("status-killswitch");
+
+            if (killSwitchState) {
+                btn.className = "bg-rose-600 hover:bg-rose-500 border border-rose-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition animate-pulse";
+                btn.innerText = "Desligar Forçado";
+                statusText.innerText = "FORÇADO LIGADO (Manual)";
+                statusText.className = "text-xs font-bold text-rose-500 dark:text-rose-400 tracking-tight mt-1";
+            } else {
+                btn.className = "bg-slate-100 dark:bg-slate-800 hover:bg-rose-600 hover:border-rose-600 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition";
+                btn.innerText = "Forçar Exaustor";
+                statusText.innerText = "AUTOMÁTICO (Borda)";
+                statusText.className = "text-xs font-bold text-emerald-600 dark:text-emerald-400 tracking-tight mt-1";
+            }
+
+            await fetch(`http://127.0.0.1:8000/api/v1/comando/${GALPAO_ID}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ forcar_exaustor: killSwitchState })
+            });
+        }
+
+        function classificarRisco(idElemento, texto, nivel) {
+            const el = document.getElementById(idElemento);
+            el.innerText = texto;
+            el.className = "ml-2 font-bold px-3 py-1 rounded-lg text-sm md:text-base border transition-colors shadow-sm";
+            if (nivel === 'verde') {
+                el.classList.add('bg-emerald-500/20', 'text-emerald-700', 'dark:text-emerald-400', 'border-emerald-500/30');
+            } else if (nivel === 'amarelo') {
+                el.classList.add('bg-amber-500/20', 'text-amber-700', 'dark:text-amber-400', 'border-amber-500/30');
+            } else if (nivel === 'vermelho') {
+                el.classList.add('bg-rose-500/20', 'text-rose-700', 'dark:text-rose-400', 'border-rose-500/30');
+            } else {
+                el.classList.add('bg-slate-100', 'dark:bg-slate-800', 'text-slate-500', 'border-slate-200', 'dark:border-slate-700');
+            }
+        }
+
+        const gridConfig = { color: 'rgba(148, 163, 184, 0.15)', borderColor: 'transparent' };
+
+        const ctxCo2 = document.getElementById('chartCo2').getContext('2d');
+        const chartCo2 = new Chart(ctxCo2, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'CO2 (ppm)', borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.05)', data: [], tension: 0.3, fill: true }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { grid: gridConfig }, x: { grid: { display: false } } } }
+        });
+
+        const ctxAr = document.getElementById('chartAr').getContext('2d');
+        const chartAr = new Chart(ctxAr, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                { label: 'NH3 (ppm)', borderColor: '#eab308', data: [], tension: 0.3 },
+                { label: 'PM2.5 (µg/m³)', borderColor: '#a855f7', data: [], tension: 0.3 }
+            ]},
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { grid: gridConfig }, x: { grid: { display: false } } } }
+        });
+
+        const ctxTermico = document.getElementById('chartTermico').getContext('2d');
+        const chartTermico = new Chart(ctxTermico, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                { label: 'Temp (°C)', borderColor: '#f43f5e', data: [], tension: 0.3, yAxisID: 'y' },
+                { label: 'Umidade (%)', borderColor: '#3b82f6', data: [], tension: 0.3, yAxisID: 'y' },
+                { label: 'Vento (m/s)', borderColor: '#06b6d4', data: [], tension: 0.3, yAxisID: 'y1' }
+            ]},
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    y: { type: 'linear', display: true, position: 'left', grid: gridConfig },
+                    y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+
+        const ctxZoo = document.getElementById('chartZootecnico').getContext('2d');
+        const chartZootecnico = new Chart(ctxZoo, {
+            type: 'bar',
+            data: { labels: [], datasets: [
+                { label: 'Mortalidade (aves)', backgroundColor: '#ef4444', data: [], yAxisID: 'y' },
+                { label: 'Temp Máx (°C)', borderColor: '#f97316', type: 'line', data: [], tension: 0.3, yAxisID: 'y1' }
+            ]},
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { position: 'left' }, y1: { position: 'right', grid: { display: false } } } }
+        });
+
+        async function carregarGalpoes() {
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/v1/galpoes');
+                const data = await res.json();
+                const select = document.getElementById('select-galpao');
+                if (data.galpoes && data.galpoes.length > 0) {
+                    select.innerHTML = data.galpoes.map(g => `<option value="${g.id}">${g.nome}</option>`).join('');
+                    GALPAO_ID = data.galpoes[0].id;
+                    atualizarDashboardReal();
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        // LIMPEZA VISUAL IMEDIATA E PREVENÇÃO DE FANTASMAS
+        // LIMPEZA VISUAL IMEDIATA E PREVENÇÃO DE FANTASMAS
+        function mudarGalpao(novoId) {
+            GALPAO_ID = novoId;
+            modoSimulacaoAtivo = false;
+            isGalpaoVazio = false; 
+            dia_ciclo_atual = 0;
+            
+            // Zera todos os textos da interface
+            document.getElementById("kpi-aves-salvas").innerText = "-- un";
+            document.getElementById("kpi-dinheiro-salvo").innerText = "R$ --";
+            document.getElementById("kpi-custo-energia").innerText = "R$ --";
+            document.getElementById("kpi-horas-exaustor").innerText = "-- h";
+            document.getElementById("lote-dia").innerText = "--";
+            document.getElementById("val-co2").innerText = "--";
+            document.getElementById("val-nh3").innerText = "--";
+            document.getElementById("val-temp").innerText = "--";
+            document.getElementById("kpi-fca").innerText = "1.--";
+            document.getElementById("status-rendimento").innerText = "Carregando...";
+            document.getElementById("msg-rendimento").innerText = "";
+            document.getElementById("maint-horas").innerText = "-- h";
+            document.getElementById("maint-badge").innerText = "--";
+            document.getElementById("ai-badge").innerText = "--";
+            document.getElementById("semaforo-texto").innerText = "--";
+
+            // Reseta cores dos badges
+            classificarRisco("val-co2", "-- ppm", "neutro");
+            classificarRisco("val-nh3", "NH3: --", "neutro");
+            classificarRisco("val-poeira", "PM2.5: --", "neutro");
+            classificarRisco("val-temp", "-- °C", "neutro");
+
+            // Limpa Arrays e força o redesenho dos Gráficos vazios
+            chartCo2.data.labels = []; chartCo2.data.datasets[0].data = []; chartCo2.update('none');
+            chartAr.data.labels = []; chartAr.data.datasets[0].data = []; chartAr.data.datasets[1].data = []; chartAr.update('none');
+            chartTermico.data.labels = []; chartTermico.data.datasets[0].data = []; chartTermico.data.datasets[1].data = []; chartTermico.data.datasets[2].data = []; chartTermico.update('none');
+            chartZootecnico.data.labels = []; chartZootecnico.data.datasets[0].data = []; chartZootecnico.data.datasets[1].data = []; chartZootecnico.update('none');
+
+            // Esconde TUDO instantaneamente até que o banco responda
+            document.getElementById("conteudo-painel").classList.add("hidden");
+            document.getElementById("mensagem-vazio").classList.add("hidden");
+            document.getElementById("mensagem-vazio").classList.remove("flex");
+            
+            // Dispara nova busca
+            atualizarDashboardReal(); 
+            atualizarZootecniaERendimento();
+        }
+
+        function renderizarKPIs(data) {
+            const formatBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+            document.getElementById("kpi-aves-salvas").innerText = data.kpis_operacionais.aves_salvas + " un";
+            document.getElementById("kpi-dinheiro-salvo").innerText = formatBRL(data.kpis_financeiros.dinheiro_salvo_brl);
+            document.getElementById("kpi-custo-energia").innerText = formatBRL(data.kpis_operacionais.custo_energetico_mitigacao_brl);
+            document.getElementById("kpi-horas-exaustor").innerText = data.kpis_operacionais.horas_ventilacao_emergencia + " h";
+        }
+
+        async function executarSimulacao() {
+            if (!GALPAO_ID || isGalpaoVazio) return;
+            modoSimulacaoAtivo = true;
+            const payload = {
+                tarifa_kwh: parseFloat(document.getElementById("input-tarifa").value),
+                potencia_exaustor_kw: parseFloat(document.getElementById("input-potencia").value),
+                custo_fixo_ciclo: parseFloat(document.getElementById("input-fixo").value),
+                receita_projetada: parseFloat(document.getElementById("input-receita").value)
+            };
+            const response = await fetch(`http://127.0.0.1:8000/api/v1/simular/${GALPAO_ID}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+            });
+            if (response.ok) renderizarKPIs(await response.json());
+        }
+
+        function resetarModoReal() { modoSimulacaoAtivo = false; atualizarDashboardReal(); }
+        function exportarRelatorio() { if (GALPAO_ID && !isGalpaoVazio) window.open(`http://127.0.0.1:8000/api/v1/exportar/${GALPAO_ID}`, '_blank'); }
+
+        async function atualizarZootecniaERendimento() {
+            if(!GALPAO_ID || isGalpaoVazio) return;
+            
+            try {
+                const resRend = await fetch(`http://127.0.0.1:8000/api/v1/rendimento/${GALPAO_ID}`);
+                if(resRend.ok) {
+                    const rend = await resRend.json();
+                    const card = document.getElementById("card-rendimento");
+                    document.getElementById("status-rendimento").innerText = rend.status;
+                    document.getElementById("msg-rendimento").innerText = rend.mensagem;
+                    if(rend.alerta) {
+                        card.className = "bg-rose-50 dark:bg-rose-900/40 border border-rose-500 rounded-xl p-6 shadow-xl flex flex-col justify-center text-center animate-pulse transition-colors";
+                        document.getElementById("icone-rendimento").innerText = "⚠️";
+                    } else {
+                        card.className = "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl flex flex-col justify-center text-center transition-colors";
+                        document.getElementById("icone-rendimento").innerText = "🍗";
+                    }
+                }
+
+                const resZoo = await fetch(`http://127.0.0.1:8000/api/v1/zootecnico/${GALPAO_ID}`);
+                if(resZoo.ok) {
+                    const zoo = await resZoo.json();
+                    document.getElementById("kpi-fca").innerText = zoo.fca_atual_protegido.toFixed(2);
+                    
+                    chartZootecnico.data.labels = zoo.grafico_mortalidade.labels;
+                    chartZootecnico.data.datasets[0].data = zoo.grafico_mortalidade.mortalidade_cabecas;
+                    chartZootecnico.data.datasets[1].data = zoo.grafico_mortalidade.temperatura_max_c;
+                    chartZootecnico.update('none');
+                }
+                
+                const resAi = await fetch(`http://127.0.0.1:8000/api/v1/previsao/${GALPAO_ID}`);
+                if(resAi.ok) {
+                    const aiData = await resAi.json();
+                    document.getElementById("ai-mensagem").innerText = aiData.mensagem;
+                    const badge = document.getElementById("ai-badge");
+                    badge.innerText = aiData.risco_preditivo;
+                    if(aiData.risco_preditivo === "Alto") {
+                        badge.className = "text-xs font-semibold px-3 py-1 rounded-full bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30";
+                    } else if (aiData.risco_preditivo === "Moderado") {
+                        badge.className = "text-xs font-semibold px-3 py-1 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30";
+                    } else if (aiData.risco_preditivo === "Baixo") {
+                        badge.className = "text-xs font-semibold px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30";
+                    } else {
+                        badge.className = "text-xs font-semibold px-3 py-1 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 border border-slate-300 dark:border-slate-700";
+                    }
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function atualizarDashboardReal() {
+            if (!GALPAO_ID) return;
+            try {
+                const resMeta = await fetch(`http://127.0.0.1:8000/api/v1/metadata/${GALPAO_ID}`);
+                if (resMeta.ok) {
+                    const meta = await resMeta.json();
+                    const painel = document.getElementById("conteudo-painel");
+                    const msgVazio = document.getElementById("mensagem-vazio");
+
+                    if (meta.dia_ciclo === 0) {
+                        isGalpaoVazio = true; 
+                        dia_ciclo_atual = 0;
+                        painel.classList.add("hidden");
+                        msgVazio.classList.remove("hidden");
+                        msgVazio.classList.add("flex");
+                        return; 
+                    } else {
+                        isGalpaoVazio = false; 
+                        dia_ciclo_atual = meta.dia_ciclo;
+                        painel.classList.remove("hidden");
+                        msgVazio.classList.add("hidden");
+                        msgVazio.classList.remove("flex");
+                        
+                        document.getElementById("lote-dia").innerText = `Dia ${meta.dia_ciclo} • ${meta.fase}`;
+                        const card = document.getElementById("semaforo-card");
+                        const dot = document.getElementById("semaforo-dot");
+                        const txt = document.getElementById("semaforo-texto");
+                        txt.innerText = meta.status_geral;
+                        
+                        if (meta.cor_status === "rose") {
+                            card.className = "bg-rose-50 dark:bg-rose-950/30 border border-rose-500/30 rounded-xl p-5 shadow-xl flex items-center space-x-4 transition-all";
+                            dot.className = "w-4 h-4 rounded-full bg-rose-500 animate-ping";
+                        } else {
+                            card.className = "bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-5 shadow-xl flex items-center space-x-4 transition-all";
+                            dot.className = "w-4 h-4 rounded-full bg-emerald-500 animate-ping";
+                        }
+
+                        const refTermica = document.getElementById("ref-ideal-termica");
+                        if (meta.dia_ciclo <= 10) {
+                            refTermica.innerHTML = `&bull; Referência Ideal (Fase Inicial): Temp: 30°C - 33°C | Umidade: 50% - 60% | Vento: 0.1 - 0.5 m/s`;
+                        } else {
+                            refTermica.innerHTML = `&bull; Referência Ideal (Crescimento/Terminação): Temp: 20°C - 26°C | Umidade: 50% - 70% | Vento: 1.0 - 2.5 m/s`;
+                        }
+                    }
+                }
+
+                if (!modoSimulacaoAtivo) {
+                    const resKpis = await fetch(`http://127.0.0.1:8000/api/v1/kpis/${GALPAO_ID}`);
+                    if (resKpis.ok) renderizarKPIs(await resKpis.json());
+                }
+
+                const resTel = await fetch(`http://127.0.0.1:8000/api/v1/telemetria/${GALPAO_ID}`);
+                if (resTel.ok) {
+                    const payload = await resTel.json();
+                    const hist = payload.historico;
+                    if (hist && hist.length > 0) {
+                        const labels = hist.map(i => new Date(i.created_at).toLocaleTimeString('pt-BR'));
+                        chartCo2.data.labels = labels; chartCo2.data.datasets[0].data = hist.map(i => i.co2_ppm || 0); chartCo2.update('none');
+                        chartAr.data.labels = labels; chartAr.data.datasets[0].data = hist.map(i => i.nh3_ppm); chartAr.data.datasets[1].data = hist.map(i => i.poeira_pm25); chartAr.update('none');
+                        chartTermico.data.labels = labels; chartTermico.data.datasets[0].data = hist.map(i => i.temperatura_c); chartTermico.data.datasets[1].data = hist.map(i => i.umidade_perc); chartTermico.data.datasets[2].data = hist.map(i => i.velocidade_ar_ms || 0); chartTermico.update('none');
+
+                        const latest = hist[hist.length - 1];
+                        const co2 = latest.co2_ppm || 0;
+                        const nh3 = latest.nh3_ppm || 0;
+                        const pm25 = latest.poeira_pm25 || 0;
+                        const temp = latest.temperatura_c || 0;
+
+                        let nivelCo2 = co2 >= 2500 ? 'vermelho' : (co2 >= 1500 ? 'amarelo' : 'verde');
+                        classificarRisco("val-co2", `${co2} ppm`, nivelCo2);
+
+                        let nivelNh3 = nh3 >= 20.0 ? 'vermelho' : (nh3 >= 10.0 ? 'amarelo' : 'verde');
+                        classificarRisco("val-nh3", `NH3: ${nh3.toFixed(1)}`, nivelNh3);
+
+                        let nivelPm25 = pm25 > 60.0 ? 'vermelho' : (pm25 > 30.0 ? 'amarelo' : 'verde');
+                        classificarRisco("val-poeira", `PM2.5: ${pm25.toFixed(1)}`, nivelPm25);
+
+                        let nivelTemp = 'vermelho';
+                        if (dia_ciclo_atual <= 10) {
+                            if (temp >= 30.0 && temp <= 33.0) nivelTemp = 'verde';
+                            else if (temp >= 28.0 && temp < 30.0 || temp > 33.0 && temp <= 35.0) nivelTemp = 'amarelo';
+                        } else {
+                            if (temp >= 20.0 && temp <= 26.0) nivelTemp = 'verde';
+                            else if (temp >= 18.0 && temp < 20.0 || temp > 26.0 && temp < 32.0) nivelTemp = 'amarelo';
+                        }
+                        classificarRisco("val-temp", `${temp.toFixed(1)} °C`, nivelTemp);
+                    }
+                }
+
+                const resMaint = await fetch(`http://127.0.0.1:8000/api/v1/manutencao/${GALPAO_ID}`);
+                if (resMaint.ok) {
+                    const m = await resMaint.json();
+                    document.getElementById("maint-horas").innerText = m.horas_totais_operacao + " h";
+                    document.getElementById("maint-bar").style.width = m.percentual_desgaste + "%";
+                    if(m.percentual_desgaste < 50) {
+                        document.getElementById("maint-badge").innerText = "Saudável";
+                        document.getElementById("maint-badge").className = "text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded font-semibold";
+                    } else if(m.percentual_desgaste < 80) {
+                        document.getElementById("maint-badge").innerText = "Desgaste Moderado";
+                        document.getElementById("maint-badge").className = "text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded font-semibold";
+                    } else {
+                        document.getElementById("maint-badge").innerText = "Manutenção Exigida";
+                        document.getElementById("maint-badge").className = "text-[10px] bg-rose-500/10 text-rose-600 dark:text-rose-400 px-2 py-0.5 rounded font-semibold";
+                    }
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        carregarGalpoes();
+        setInterval(atualizarDashboardReal, 5000);
+        setInterval(atualizarZootecniaERendimento, 10000);
+    </script>
+</body>
+</html>
